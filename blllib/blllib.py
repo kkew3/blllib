@@ -36,6 +36,7 @@ operation. At the end of the ``with`` block, all process pools are closed.
 """
 import collections
 import multiprocessing
+import queue
 import typing
 from typing import Union, Tuple, Sequence, Iterable, Callable
 
@@ -158,12 +159,10 @@ sentinel = Sentinel()
 
 def process_stateful_master(inq: multiprocessing.Queue,
                             outq: multiprocessing.Queue,
-                            batch_size: int,
                             iterable: Iterable) -> Iterable:
     """
     :param inq: input queue to the worker process
     :param outq: output queue from the worker process
-    :param batch_size: as revealed from the underlying callable
     :param iterable: the input stream
     :return: the output stream
     """
@@ -171,10 +170,14 @@ def process_stateful_master(inq: multiprocessing.Queue,
     qcount = 0
     while True:
         try:
-            while qcount < batch_size:
+            while True:
                 x = next(it)
-                inq.put(x)
-                qcount += 1
+                try:
+                    inq.put_nowait(x)
+                except queue.Full:
+                    break
+                else:
+                    qcount += 1
         except StopIteration:
             inq.put(sentinel)
             inq.close()
@@ -212,7 +215,8 @@ class Pipeline(object):
         if n_cpu:
             self.n_cpu = n_cpu
         else:
-            self.n_cpu = max(1, multiprocessing.cpu_count() - stateful_count)
+            total = multiprocessing.cpu_count()
+            self.n_cpu = max(1, total - stateful_count - 1)
         self.callables = callables
         self.ss = ss
         self.pool = None  # type: typing.Optional[multiprocessing.Pool]
@@ -251,14 +255,14 @@ class Pipeline(object):
         for s, f in zip(self.ss, self.callables):
             batch_size = feeding_batch_size(f)
             if not conditionally_stateless(s):
-                inq = multiprocessing.Queue()
+                inq = multiprocessing.Queue(maxsize=batch_size)
                 outq = multiprocessing.Queue()
                 subp = multiprocessing.Process(target=process_stateful,
                                                name=repr(f),
                                                args=(inq, outq, f))
                 self.subps.append((inq, outq, subp))
                 subp.start()
-                it = process_stateful_master(inq, outq, batch_size, it)
+                it = process_stateful_master(inq, outq, it)
             elif requires_batch(s):
                 it = group_into_batches(s, it)
                 it = process_stateless(self.pool, f, batch_size, it)
