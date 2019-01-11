@@ -19,6 +19,9 @@ expected two instance or static attributes:
       run in a separate process so as to achieve better efficiency. This
       attribute is default to 1 (blocked at every input or input batch, no
       parallelism)
+    - ``run_in_master``: if defined, whatever its value, it makes the
+      callable object run in master process, in which case ``batch_size``
+      will get ignored
 
 Example usage::
 
@@ -39,6 +42,7 @@ import multiprocessing
 import queue
 import typing
 from typing import Union, Tuple, Sequence, Iterable, Callable
+import pdb
 
 __all__ = ['Pipeline', 'SequentialPipeline']
 
@@ -129,6 +133,20 @@ def conditionally_stateless(stateful: Union[bool, int]) -> bool:
     return stateful is not True
 
 
+def run_in_master(f: Callable) -> bool:
+    return hasattr(f, 'run_in_master')
+
+
+class Sentinel(object): pass
+
+
+sentinel = Sentinel()
+
+
+def is_sentinel(x):
+    return isinstance(x, Sentinel)
+
+
 def process_stateless(pool: multiprocessing.Pool,
                       f: Callable[[S], T],
                       batch_size: int,
@@ -147,14 +165,6 @@ def process_stateless(pool: multiprocessing.Pool,
         finally:
             if len(future_results):
                 yield future_results.popleft().get()
-
-
-class Sentinel(object):
-    def __eq__(self, other):
-        return type(self) == type(other)
-
-
-sentinel = Sentinel()
 
 
 def process_stateful_master(inq: multiprocessing.Queue,
@@ -180,10 +190,13 @@ def process_stateful_master(inq: multiprocessing.Queue,
                     qcount += 1
         except StopIteration:
             inq.put(sentinel)
-            inq.close()
-            while qcount:
-                yield outq.get()
-                qcount -= 1
+            while True:
+                y = outq.get()
+                if is_sentinel(y):
+                    break
+                else:
+                    yield y
+                    qcount -= 1
             break
         finally:
             if qcount:
@@ -196,8 +209,8 @@ def process_stateful(inq: multiprocessing.Queue,
                      f: Callable) -> None:
     while True:
         x = inq.get()
-        if x == sentinel:
-            outq.close()
+        if is_sentinel(x):
+            outq.put(x)
             break
         y = f(x)
         outq.put(y)
@@ -211,12 +224,18 @@ SubpBundleType = Tuple[multiprocessing.Queue,
 class Pipeline(object):
     def __init__(self, callables: Sequence[Callable], n_cpu: int = None):
         ss = list(map(statefulness, callables))
-        stateful_count = len(ss) - sum(map(conditionally_stateless, ss))
+        master_count = sum(map(run_in_master, callables))
+        stateful_count = sum(((not conditionally_stateless(s)
+                               and not run_in_master(f))
+                              for s, f in zip(ss, callables)))
         if n_cpu:
-            self.n_cpu = n_cpu
+            pool_n_cpu = max(1, n_cpu - stateful_count)
         else:
             total = multiprocessing.cpu_count()
-            self.n_cpu = max(1, total - stateful_count - 1)
+            pool_n_cpu = max(1, total - stateful_count - 1)
+        self.n_cpu = pool_n_cpu
+        """Number of processes in the multiprocessing.Pool"""
+
         self.callables = callables
         self.ss = ss
         self.pool = None  # type: typing.Optional[multiprocessing.Pool]
@@ -231,14 +250,13 @@ class Pipeline(object):
     def close(self):
         if self.pool:
             self.pool.close()
-        for inq, _, subp in self.subps:
+        for inq, outq, subp in self.subps:
             # noinspection PyBroadException
-            try:
-                inq.put(sentinel)
-            except:
-                pass
-            else:
-                inq.close()
+            inq.put(sentinel)
+            while True:
+                y = outq.get()
+                if is_sentinel(y):
+                    break
             subp.join()
         if self.pool:
             self.pool.join()
@@ -257,12 +275,17 @@ class Pipeline(object):
 
         for s, f in zip(self.ss, self.callables):
             batch_size = feeding_batch_size(f)
-            if not conditionally_stateless(s):
+            if run_in_master(f):
+                if requires_batch(s):
+                    it = group_into_batches(s, it)
+                it = map(f, it)
+            elif not conditionally_stateless(s):
                 inq = multiprocessing.Queue(maxsize=batch_size)
                 outq = multiprocessing.Queue()
                 subp = multiprocessing.Process(target=process_stateful,
                                                name=repr(f),
                                                args=(inq, outq, f))
+                subp.daemon = True
                 self.subps.append((inq, outq, subp))
                 subp.start()
                 it = process_stateful_master(inq, outq, it)

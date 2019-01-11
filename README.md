@@ -101,6 +101,8 @@ For each non-stateful callable, at most `batch_size` number of inputs are fed to
 Likewise, later inputs have to wait for the production of the output induced by the earliest input.
 When `batch_size = 1`, the underlying process/pool will essentially run jobs sequentially.
 This metric is default to `1` if not found.
+- `run_in_master`: whever specified (whatever its value), it makes the callabe object run sequentially in the master process, in which case `batch_size` is ignored.
+This metric is by default not specified.
 
 The callable-specific metrics can be specified as either the instance variable or the class variable.
 For example:

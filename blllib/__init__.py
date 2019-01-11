@@ -19,6 +19,9 @@ expected two instance or static attributes:
       run in a separate process so as to achieve better efficiency. This
       attribute is default to 1 (blocked at every input or input batch, no
       parallelism)
+    - ``run_in_master``: if defined, whatever its value, it makes the
+      callable object run in master process, in which case ``batch_size``
+      will get ignored
 
 Example usage::
 
