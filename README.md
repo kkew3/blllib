@@ -131,3 +131,9 @@ class Add2(object):
         x, y = args
         return x + y
 ```
+
+## What `batch_size` makes sense
+
+When `batch_size` is `1`, as said earlier, each worker process runs sequentially, under which circumstance non-stateful callable downgrades to stateful callables.
+For non-stateful callables, once `batch_size` is larger than the number of workers in the pool, it does no good but consumes more memory.
+For stateful callables, when memory is sufficient, the larger `batch_size` is, the more efficient the pipeline becomes.
