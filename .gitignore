@@ -2,3 +2,8 @@ rt/
 __pycache__/
 *.swp
 .DS_Store
+blllib.egg-info/
+dist/
+
+# used for debugging
+reload_blllib_dev.sh
