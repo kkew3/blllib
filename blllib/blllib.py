@@ -226,6 +226,9 @@ class Pipeline(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
         if self.pool:
             self.pool.close()
         for inq, _, subp in self.subps:

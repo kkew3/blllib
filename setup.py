@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
     name='blllib',
     packages=['blllib'],
-    version='0.9b2',
+    version='0.9b3',
     license='MIT',
     description='Batched concurrent pipeline',
     author='Kaiwen Wu',
