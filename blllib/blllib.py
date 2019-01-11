@@ -247,7 +247,7 @@ class Pipeline(object):
         setattr(self, 'iterable', iter(iterable))
         return self
 
-    def __iter__(self) -> typing.Iterator:
+    def __iter__(self):
         """
         Build computation graph only.
         """
@@ -266,8 +266,37 @@ class Pipeline(object):
                 self.subps.append((inq, outq, subp))
                 subp.start()
                 it = process_stateful_master(inq, outq, it)
-            elif requires_batch(s):
-                it = group_into_batches(s, it)
+            else:
+                if requires_batch(s):
+                    it = group_into_batches(s, it)
                 it = process_stateless(self.pool, f, batch_size, it)
+        return it
 
+
+class SequentialPipeline(object):
+    def __init__(self, callables: Sequence[Callable], **kwargs):
+        self.callables = callables
+        self.ss = list(map(statefulness, callables))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def close(self):
+        pass
+
+    def apply(self, iterable: Iterable):
+        setattr(self, 'iterable', iter(iterable))
+        return self
+
+    def __iter__(self):
+        it = getattr(self, 'iterable')
+        delattr(self, 'iterable')
+
+        for s, f in zip(self.ss, self.callables):
+            if requires_batch(s):
+                it = group_into_batches(s, it)
+            it = map(f, it)
         return it
