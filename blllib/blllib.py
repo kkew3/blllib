@@ -40,7 +40,7 @@ import queue
 import typing
 from typing import Union, Tuple, Sequence, Iterable, Callable
 
-__all__ = ['Pipeline']
+__all__ = ['Pipeline', 'SequentialPipeline']
 
 S = typing.TypeVar('S')
 T = typing.TypeVar('T')
