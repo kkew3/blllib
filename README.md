@@ -16,11 +16,32 @@ with Pipeline(operations) as pipeline:
 
 The `pipeline.apply` can be called *only once*.
 
-**Installation**:
+`blllib` also provides a sequential version of `Pipeline`, called `SequentialPipeline`.
+Unlike `Pipeline` (for now), it can be applied many times:
+
+```python
+from blllib import SequentialPipeline
+operations = ...  # a sequence of callables
+inputs = ...      # an iterable of inputs
+inputs2 = ...     # another iterable of inputs
+with SequentialPipeline(operations) as pipeline:
+    for output in pipeline.apply(inputs):
+        print(output)
+    for output in pipeline.apply(inputs2):
+        print(output)
+```
+
+## Installation
+
+Install via `pip`:
 
 ```
 pip install blllib
 ```
+
+## Dependency
+
+- `Python-3.5` or above
 
 
 ## Statefulness of callable objects
