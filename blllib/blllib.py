@@ -42,7 +42,6 @@ import multiprocessing
 import queue
 import typing
 from typing import Union, Tuple, Sequence, Iterable, Callable
-import pdb
 
 __all__ = ['Pipeline', 'SequentialPipeline']
 
