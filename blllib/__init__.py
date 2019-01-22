@@ -38,4 +38,4 @@ Despite having multiple operations, the stream won't be blocked at the first
 operation. At the end of the ``with`` block, all process pools are closed.
 """
 
-from blllib.blllib import Pipeline
+from blllib.blllib import Pipeline, SequentialPipeline
