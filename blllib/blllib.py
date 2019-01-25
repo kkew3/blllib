@@ -223,7 +223,6 @@ SubpBundleType = Tuple[multiprocessing.Queue,
 class Pipeline(object):
     def __init__(self, callables: Sequence[Callable], n_cpu: int = None):
         ss = list(map(statefulness, callables))
-        master_count = sum(map(run_in_master, callables))
         stateful_count = sum(((not conditionally_stateless(s)
                                and not run_in_master(f))
                               for s, f in zip(ss, callables)))
